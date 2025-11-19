@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGO Dashboard - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker - NGO</div>
+            <ul class="nav-links">
+                <li><a href="/ngo_dashboard.html">Dashboard</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Welcome, <span id="ngoName"></span>!</h1>
+        <div id="alert-container"></div>
+
+        <div class="dashboard-grid">
+            <div class="stat-card">
+                <h3 id="pendingDonations">0</h3>
+                <p>Pending Donations</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="acceptedDonations">0</h3>
+                <p>Accepted Donations</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="completedDonations">0</h3>
+                <p>Completed Donations</p>
+            </div>
+        </div>
+
+        <div class="card mt-20">
+            <h2 class="card-header">Pending Donation Requests</h2>
+            <div id="pendingRequests" class="food-grid"></div>
+        </div>
+
+        <div class="card mt-20">
+            <h2 class="card-header">My Donations</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Food Item</th>
+                        <th>Quantity</th>
+                        <th>User Location</th>
+                        <th>Request Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="donationsTable">
+                    <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        async function loadDashboard() {
+            try {
+                // Load pending donations
+                const pending = await donationAPI.getPending();
+                document.getElementById('pendingDonations').textContent = pending.length || 0;
+
+                const pendingContainer = document.getElementById('pendingRequests');
+                if (pending.length === 0) {
+                    pendingContainer.innerHTML = '<p>No pending donation requests.</p>';
+                } else {
+                    pendingContainer.innerHTML = pending.map(donation => `
+                        <div class="food-card">
+                            <h4>${donation.foodItem ? donation.foodItem.itemName : 'N/A'}</h4>
+                            <p><strong>Quantity:</strong> ${donation.foodItem ? donation.foodItem.quantity : 'N/A'}</p>
+                            <p><strong>Category:</strong> ${donation.foodItem ? donation.foodItem.category : 'N/A'}</p>
+                            <p><strong>User:</strong> ${donation.user ? donation.user.name : 'N/A'}</p>
+                            <p><strong>Location:</strong> ${donation.user ? donation.user.location : 'N/A'}</p>
+                            <p><strong>Pincode:</strong> ${donation.user ? donation.user.pincode : 'N/A'}</p>
+                            <p><strong>Request Date:</strong> ${formatDate(donation.requestDate)}</p>
+                            <button onclick="acceptDonation(${donation.id})" class="btn btn-primary btn-block mt-20">Accept Pickup</button>
+                        </div>
+                    `).join('');
+                }
+
+                // Load NGO donations
+                const donations = await donationAPI.getNGODonations();
+                const accepted = donations.filter(d => d.status === 'ACCEPTED' || d.status === 'COLLECTED' || d.status === 'DELIVERED');
+                const completed = donations.filter(d => d.status === 'COMPLETED');
+                
+                document.getElementById('acceptedDonations').textContent = accepted.length || 0;
+                document.getElementById('completedDonations').textContent = completed.length || 0;
+
+                const donationsTable = document.getElementById('donationsTable');
+                if (donations.length === 0) {
+                    donationsTable.innerHTML = '<tr><td colspan="6" style="text-align: center;">No donations found.</td></tr>';
+                } else {
+                    donationsTable.innerHTML = donations.map(donation => {
+                        let statusOptions = '';
+                        if (donation.status === 'ACCEPTED') {
+                            statusOptions = `
+                                <select onchange="updateStatus(${donation.id}, this.value)" class="btn">
+                                    <option value="ACCEPTED" selected>Accepted</option>
+                                    <option value="COLLECTED">Collected</option>
+                                    <option value="DELIVERED">Delivered</option>
+                                    <option value="COMPLETED">Completed</option>
+                                </select>
+                            `;
+                        } else if (donation.status === 'COLLECTED') {
+                            statusOptions = `
+                                <select onchange="updateStatus(${donation.id}, this.value)" class="btn">
+                                    <option value="COLLECTED" selected>Collected</option>
+                                    <option value="DELIVERED">Delivered</option>
+                                    <option value="COMPLETED">Completed</option>
+                                </select>
+                            `;
+                        } else if (donation.status === 'DELIVERED') {
+                            statusOptions = `
+                                <select onchange="updateStatus(${donation.id}, this.value)" class="btn">
+                                    <option value="DELIVERED" selected>Delivered</option>
+                                    <option value="COMPLETED">Completed</option>
+                                </select>
+                            `;
+                        } else {
+                            statusOptions = `<span class="alert alert-success">${donation.status}</span>`;
+                        }
+
+                        let statusClass = '';
+                        switch(donation.status) {
+                            case 'PENDING':
+                                statusClass = 'alert alert-warning';
+                                break;
+                            case 'ACCEPTED':
+                            case 'COLLECTED':
+                            case 'DELIVERED':
+                                statusClass = 'alert alert-info';
+                                break;
+                            case 'COMPLETED':
+                                statusClass = 'alert alert-success';
+                                break;
+                        }
+
+                        return `
+                            <tr>
+                                <td>${donation.foodItem ? donation.foodItem.itemName : 'N/A'}</td>
+                                <td>${donation.foodItem ? donation.foodItem.quantity : 'N/A'}</td>
+                                <td>${donation.user ? (donation.user.location + ', ' + donation.user.pincode) : 'N/A'}</td>
+                                <td>${formatDate(donation.requestDate)}</td>
+                                <td><span class="${statusClass}" style="padding: 5px 10px; border-radius: 5px;">${donation.status}</span></td>
+                                <td>${statusOptions}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                window.location.href = '/login.html';
+            }
+        }
+
+        async function acceptDonation(donationId) {
+            try {
+                const response = await donationAPI.accept(donationId);
+                if (response.success) {
+                    showAlert('Donation accepted successfully!', 'success');
+                    loadDashboard();
+                } else {
+                    showAlert(response.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Failed to accept donation', 'danger');
+                console.error('Accept error:', error);
+            }
+        }
+
+        async function updateStatus(donationId, status) {
+            try {
+                const response = await donationAPI.updateStatus(donationId, status);
+                if (response.success) {
+                    showAlert('Status updated successfully!', 'success');
+                    loadDashboard();
+                } else {
+                    showAlert(response.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Failed to update status', 'danger');
+                console.error('Update error:', error);
+            }
+        }
+
+        async function logout() {
+            try {
+                await ngoAPI.logout();
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            } catch (error) {
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donate Food - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker</div>
+            <ul class="nav-links">
+                <li><a href="/dashboard.html">Dashboard</a></li>
+                <li><a href="/foodlist.html">My Food Items</a></li>
+                <li><a href="/addfood.html">Add Food</a></li>
+                <li><a href="/donations_status.html">Donations</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Donate Food</h1>
+        <div id="alert-container"></div>
+
+        <div class="card">
+            <h2 class="card-header">Select Food Item to Donate</h2>
+            <div id="foodItemsList" class="food-grid"></div>
+        </div>
+
+        <div class="card mt-20" id="ngoSelection" style="display: none;">
+            <h2 class="card-header">Select Nearby NGO</h2>
+            <div class="form-group">
+                <label for="pincode">Enter Pincode:</label>
+                <input type="text" id="pincode" placeholder="Enter pincode" pattern="[0-9]{6}">
+                <button onclick="searchNGOs()" class="btn btn-primary mt-20">Search NGOs</button>
+            </div>
+            <div id="ngosList" class="food-grid"></div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        let selectedFoodId = null;
+
+        async function loadFoodItems() {
+            try {
+                const items = await foodAPI.getActive();
+                const container = document.getElementById('foodItemsList');
+
+                if (items.length === 0) {
+                    container.innerHTML = '<p>No active food items available for donation. <a href="/addfood.html">Add food items</a></p>';
+                    return;
+                }
+
+                container.innerHTML = items.map(item => {
+                    const daysUntilExpiry = getDaysUntilExpiry(item.expiryDate);
+                    return `
+                        <div class="food-card">
+                            <h4>${item.itemName}</h4>
+                            <p><strong>Quantity:</strong> ${item.quantity}</p>
+                            <p><strong>Category:</strong> ${item.category}</p>
+                            <p><strong>Expiry Date:</strong> ${formatDate(item.expiryDate)}</p>
+                            ${daysUntilExpiry !== null ? `<p>Expires in ${daysUntilExpiry} days</p>` : ''}
+                            <button onclick="selectFoodItem(${item.id})" class="btn btn-primary btn-block mt-20">Select for Donation</button>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading food items:', error);
+                showAlert('Failed to load food items', 'danger');
+            }
+        }
+
+        function selectFoodItem(foodId) {
+            selectedFoodId = foodId;
+            document.getElementById('ngoSelection').style.display = 'block';
+            document.getElementById('ngoSelection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function searchNGOs() {
+            const pincode = document.getElementById('pincode').value;
+            if (!pincode || pincode.length !== 6) {
+                showAlert('Please enter a valid 6-digit pincode', 'danger');
+                return;
+            }
+
+            try {
+                const ngos = await ngoAPI.getNearby(pincode);
+                const container = document.getElementById('ngosList');
+
+                if (ngos.length === 0) {
+                    container.innerHTML = '<p>No NGOs found in this area. Try a different pincode.</p>';
+                    return;
+                }
+
+                container.innerHTML = ngos.map(ngo => `
+                    <div class="food-card">
+                        <h4>${ngo.ngoName}</h4>
+                        <p><strong>Address:</strong> ${ngo.address}</p>
+                        <p><strong>Pincode:</strong> ${ngo.pincode}</p>
+                        <p><strong>Email:</strong> ${ngo.email}</p>
+                        <p><strong>Status:</strong> ${ngo.status}</p>
+                        <button onclick="createDonation(${ngo.id})" class="btn btn-warning btn-block mt-20">Request Donation</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error searching NGOs:', error);
+                showAlert('Failed to search NGOs', 'danger');
+            }
+        }
+
+        async function createDonation(ngoId) {
+            if (!selectedFoodId) {
+                showAlert('Please select a food item first', 'danger');
+                return;
+            }
+
+            try {
+                const response = await donationAPI.create(selectedFoodId);
+                if (response.success) {
+                    showAlert('Donation request created successfully! The NGO will be notified.', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/donations_status.html';
+                    }, 2000);
+                } else {
+                    showAlert(response.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Failed to create donation request', 'danger');
+                console.error('Donation error:', error);
+            }
+        }
+
+        async function logout() {
+            try {
+                await userAPI.logout();
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            } catch (error) {
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            }
+        }
+
+        loadFoodItems();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Food Item - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker</div>
+            <ul class="nav-links">
+                <li><a href="/dashboard.html">Dashboard</a></li>
+                <li><a href="/foodlist.html">My Food Items</a></li>
+                <li><a href="/addfood.html">Add Food</a></li>
+                <li><a href="/donations_status.html">Donations</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 600px;">
+        <div class="card">
+            <h2 class="card-header">Add Food Item</h2>
+            <div id="alert-container"></div>
+            
+            <form id="addFoodForm">
+                <div class="form-group">
+                    <label for="itemName">Item Name:</label>
+                    <input type="text" id="itemName" name="itemName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="quantity">Quantity:</label>
+                    <input type="text" id="quantity" name="quantity" placeholder="e.g., 500g, 2 pieces" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="category">Category:</label>
+                    <select id="category" name="category" required onchange="autoSetExpiry()">
+                        <option value="">Select Category</option>
+                        <option value="VEGETABLE">Vegetable</option>
+                        <option value="FRUIT">Fruit</option>
+                        <option value="COOKED_FOOD">Cooked Food</option>
+                        <option value="PACKAGED">Packaged Food</option>
+                        <option value="DAIRY">Dairy</option>
+                        <option value="MEAT">Meat/Chicken</option>
+                        <option value="BREAD">Bread</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="purchaseDate">Purchase Date:</label>
+                    <input type="date" id="purchaseDate" name="purchaseDate" required onchange="autoSetExpiry()">
+                </div>
+
+                <div class="form-group">
+                    <label for="expiryDate">Expiry Date:</label>
+                    <input type="date" id="expiryDate" name="expiryDate">
+                    <small style="color: #666;">(Auto-calculated based on category, or set manually)</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Add Food Item</button>
+                <a href="/foodlist.html" class="btn btn-secondary btn-block mt-20">Cancel</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        // Set today's date as default for purchase date
+        document.getElementById('purchaseDate').valueAsDate = new Date();
+
+        function autoSetExpiry() {
+            const category = document.getElementById('category').value;
+            const purchaseDate = document.getElementById('purchaseDate').value;
+            
+            if (!category || !purchaseDate) return;
+
+            const categoryDays = {
+                'VEGETABLE': 3,
+                'FRUIT': 5,
+                'COOKED_FOOD': 1,
+                'PACKAGED': 15,
+                'DAIRY': 7,
+                'MEAT': 2,
+                'BREAD': 3
+            };
+
+            const days = categoryDays[category] || 7;
+            const purchase = new Date(purchaseDate);
+            const expiry = new Date(purchase);
+            expiry.setDate(purchase.getDate() + days);
+            
+            document.getElementById('expiryDate').valueAsDate = expiry;
+        }
+
+        document.getElementById('addFoodForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const alertContainer = document.getElementById('alert-container');
+            const formData = {
+                itemName: document.getElementById('itemName').value,
+                quantity: document.getElementById('quantity').value,
+                category: document.getElementById('category').value,
+                purchaseDate: document.getElementById('purchaseDate').value,
+                expiryDate: document.getElementById('expiryDate').value,
+                status: 'ACTIVE'
+            };
+
+            try {
+                const response = await foodAPI.add(formData);
+                
+                if (response.success) {
+                    alertContainer.innerHTML = `<div class="alert alert-success">${response.message}<br>${response.expiryAlert || ''}</div>`;
+                    document.getElementById('addFoodForm').reset();
+                    document.getElementById('purchaseDate').valueAsDate = new Date();
+                    
+                    setTimeout(() => {
+                        window.location.href = '/foodlist.html';
+                    }, 2000);
+                } else {
+                    alertContainer.innerHTML = `<div class="alert alert-danger">${response.message}</div>`;
+                }
+            } catch (error) {
+                alertContainer.innerHTML = `<div class="alert alert-danger">Failed to add food item. Please try again.</div>`;
+                console.error('Error adding food item:', error);
+            }
+        });
+
+        async function logout() {
+            try {
+                await userAPI.logout();
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            } catch (error) {
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            }
+        }
+    </script>
+</body>
+</html>
+

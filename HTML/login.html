@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker</div>
+            <ul class="nav-links">
+                <li><a href="/index.html">Home</a></li>
+                <li><a href="/register.html">Register</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 500px; margin-top: 50px;">
+        <div class="card">
+            <h2 class="card-header">Login</h2>
+            <div id="alert-container"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Login As:</label>
+                    <select id="userType" required>
+                        <option value="user">User</option>
+                        <option value="ngo">NGO</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+            </form>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <p>Don't have an account? <a href="/register.html">Register here</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userType = document.getElementById('userType').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const alertContainer = document.getElementById('alert-container');
+            
+            try {
+                let response;
+                if (userType === 'user') {
+                    response = await userAPI.login({ email, password });
+                    if (response.success) {
+                        setAuthInfo(response.user);
+                        window.location.href = '/dashboard.html';
+                    }
+                } else if (userType === 'ngo') {
+                    response = await ngoAPI.login({ email, password });
+                    if (response.success) {
+                        setAuthInfo(response.ngo);
+                        window.location.href = '/ngo_dashboard.html';
+                    }
+                } else if (userType === 'admin') {
+                    response = await adminAPI.login({ email, password });
+                    if (response.success) {
+                        window.location.href = '/admin_dashboard.html';
+                    }
+                }
+                
+                if (!response.success) {
+                    alertContainer.innerHTML = `<div class="alert alert-danger">${response.message}</div>`;
+                }
+            } catch (error) {
+                alertContainer.innerHTML = `<div class="alert alert-danger">Login failed. Please try again.</div>`;
+                console.error('Login error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

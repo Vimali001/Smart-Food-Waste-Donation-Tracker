@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Food Items - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker</div>
+            <ul class="nav-links">
+                <li><a href="/dashboard.html">Dashboard</a></li>
+                <li><a href="/foodlist.html">My Food Items</a></li>
+                <li><a href="/addfood.html">Add Food</a></li>
+                <li><a href="/donations_status.html">Donations</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-between" style="align-items: center; margin-bottom: 20px;">
+            <h1>My Food Items</h1>
+            <a href="/addfood.html" class="btn btn-primary">Add Food Item</a>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="card">
+            <div class="d-flex justify-between" style="margin-bottom: 20px;">
+                <div>
+                    <button onclick="filterItems('all')" class="btn btn-secondary">All</button>
+                    <button onclick="filterItems('active')" class="btn btn-info">Active</button>
+                    <button onclick="filterItems('expiring')" class="btn btn-warning">Expiring Soon</button>
+                </div>
+            </div>
+
+            <div id="foodItems" class="food-grid"></div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        let allItems = [];
+        let currentFilter = 'all';
+
+        async function loadFoodItems() {
+            try {
+                allItems = await foodAPI.getAll();
+                displayItems(allItems);
+            } catch (error) {
+                console.error('Error loading food items:', error);
+                document.getElementById('alert-container').innerHTML = 
+                    '<div class="alert alert-danger">Failed to load food items. Please try again.</div>';
+            }
+        }
+
+        function filterItems(type) {
+            currentFilter = type;
+            let filtered = allItems;
+
+            if (type === 'active') {
+                filtered = allItems.filter(item => item.status === 'ACTIVE');
+            } else if (type === 'expiring') {
+                filtered = allItems.filter(item => {
+                    if (!item.expiryDate) return false;
+                    const days = getDaysUntilExpiry(item.expiryDate);
+                    return days >= 0 && days <= 2 && item.status === 'ACTIVE';
+                });
+            }
+
+            displayItems(filtered);
+        }
+
+        function displayItems(items) {
+            const container = document.getElementById('foodItems');
+            
+            if (items.length === 0) {
+                container.innerHTML = '<p>No food items found. <a href="/addfood.html">Add your first food item</a></p>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => {
+                const daysUntilExpiry = getDaysUntilExpiry(item.expiryDate);
+                let cardClass = 'food-card';
+                let expiryAlert = '';
+
+                if (daysUntilExpiry !== null) {
+                    if (daysUntilExpiry < 0) {
+                        cardClass += ' expired';
+                        expiryAlert = `<div class="expiry-alert alert alert-danger">⚠️ Expired ${Math.abs(daysUntilExpiry)} days ago</div>`;
+                    } else if (daysUntilExpiry <= 2) {
+                        cardClass += ' expiring';
+                        expiryAlert = `<div class="expiry-alert alert alert-warning">⚠️ Expiring in ${daysUntilExpiry} day(s)</div>`;
+                    } else if (daysUntilExpiry <= 7) {
+                        expiryAlert = `<div class="expiry-alert alert alert-info">⏰ Expires in ${daysUntilExpiry} days</div>`;
+                    } else {
+                        expiryAlert = `<div class="expiry-alert" style="color: green;">✅ Expires in ${daysUntilExpiry} days</div>`;
+                    }
+                }
+
+                return `
+                    <div class="${cardClass}">
+                        <h4>${item.itemName}</h4>
+                        <p><strong>Quantity:</strong> ${item.quantity}</p>
+                        <p><strong>Category:</strong> ${item.category}</p>
+                        <p><strong>Purchase Date:</strong> ${formatDate(item.purchaseDate)}</p>
+                        <p><strong>Expiry Date:</strong> ${formatDate(item.expiryDate)}</p>
+                        <p><strong>Status:</strong> ${item.status}</p>
+                        ${expiryAlert}
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            ${item.status === 'ACTIVE' ? `
+                                <button onclick="editItem(${item.id})" class="btn btn-info" style="flex: 1;">Edit</button>
+                                <button onclick="donateItem(${item.id})" class="btn btn-warning" style="flex: 1;">Donate</button>
+                                <button onclick="deleteItem(${item.id})" class="btn btn-danger" style="flex: 1;">Delete</button>
+                            ` : `
+                                <button onclick="deleteItem(${item.id})" class="btn btn-danger btn-block">Delete</button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteItem(id) {
+            if (!confirm('Are you sure you want to delete this food item?')) return;
+
+            try {
+                const response = await foodAPI.delete(id);
+                if (response.success) {
+                    showAlert('Food item deleted successfully', 'success');
+                    loadFoodItems();
+                } else {
+                    showAlert(response.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Failed to delete food item', 'danger');
+                console.error('Delete error:', error);
+            }
+        }
+
+        async function donateItem(id) {
+            if (!confirm('Are you sure you want to donate this food item?')) return;
+
+            try {
+                const response = await donationAPI.create(id);
+                if (response.success) {
+                    showAlert('Donation request created successfully!', 'success');
+                    window.location.href = '/donate.html?foodId=' + id;
+                } else {
+                    showAlert(response.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Failed to create donation request', 'danger');
+                console.error('Donate error:', error);
+            }
+        }
+
+        function editItem(id) {
+            window.location.href = '/addfood.html?edit=' + id;
+        }
+
+        async function logout() {
+            try {
+                await userAPI.logout();
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            } catch (error) {
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            }
+        }
+
+        loadFoodItems();
+    </script>
+</body>
+</html>
+

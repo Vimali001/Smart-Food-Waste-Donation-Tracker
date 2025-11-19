@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation Status - Food Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo">🍽️ FoodTracker</div>
+            <ul class="nav-links">
+                <li><a href="/dashboard.html">Dashboard</a></li>
+                <li><a href="/foodlist.html">My Food Items</a></li>
+                <li><a href="/addfood.html">Add Food</a></li>
+                <li><a href="/donations_status.html">Donations</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-between" style="align-items: center; margin-bottom: 20px;">
+            <h1>My Donations</h1>
+            <a href="/donate.html" class="btn btn-primary">Donate Food</a>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Food Item</th>
+                        <th>Quantity</th>
+                        <th>NGO</th>
+                        <th>Request Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="donationsTable">
+                    <tr>
+                        <td colspan="5" style="text-align: center;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        async function loadDonations() {
+            try {
+                const donations = await donationAPI.getUserDonations();
+                const tableBody = document.getElementById('donationsTable');
+
+                if (donations.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No donations found. <a href="/donate.html">Donate food</a></td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = donations.map(donation => {
+                    let statusClass = '';
+                    let statusText = donation.status || 'PENDING';
+                    
+                    switch(statusText) {
+                        case 'PENDING':
+                            statusClass = 'alert alert-warning';
+                            break;
+                        case 'ACCEPTED':
+                            statusClass = 'alert alert-info';
+                            break;
+                        case 'COLLECTED':
+                            statusClass = 'alert alert-info';
+                            break;
+                        case 'DELIVERED':
+                            statusClass = 'alert alert-info';
+                            break;
+                        case 'COMPLETED':
+                            statusClass = 'alert alert-success';
+                            break;
+                        case 'REJECTED':
+                            statusClass = 'alert alert-danger';
+                            break;
+                        default:
+                            statusClass = 'alert alert-warning';
+                    }
+
+                    return `
+                        <tr>
+                            <td>${donation.foodItem ? donation.foodItem.itemName : 'N/A'}</td>
+                            <td>${donation.foodItem ? donation.foodItem.quantity : 'N/A'}</td>
+                            <td>${donation.ngo ? donation.ngo.ngoName : 'Pending NGO'}</td>
+                            <td>${formatDate(donation.requestDate)}</td>
+                            <td><span class="${statusClass}" style="padding: 5px 10px; border-radius: 5px; display: inline-block;">${statusText}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading donations:', error);
+                document.getElementById('alert-container').innerHTML = 
+                    '<div class="alert alert-danger">Failed to load donations. Please try again.</div>';
+            }
+        }
+
+        async function logout() {
+            try {
+                await userAPI.logout();
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            } catch (error) {
+                clearAuthInfo();
+                window.location.href = '/index.html';
+            }
+        }
+
+        loadDonations();
+    </script>
+</body>
+</html>
+
